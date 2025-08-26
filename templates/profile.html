@@ -1,0 +1,702 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Dynamic AI Chatbot{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-6">
+    <!-- Profile Header -->
+    <div class="bg-white rounded-xl shadow-sm p-8 mb-6 border border-gray-200">
+        <div class="flex items-center space-x-6">
+            <div class="w-20 h-20 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {{ session.username[0].upper() if session.username else 'U' }}
+            </div>
+            <div class="flex-1">
+                <h1 class="text-2xl font-bold text-gray-900 mb-2" id="displayUsername">{{ session.username or 'User' }}</h1>
+                <div class="flex items-center space-x-4 text-sm text-gray-600">
+                    <span class="flex items-center">
+                        <i class="fas fa-calendar-alt mr-1"></i>
+                        Member since: <span id="memberSince">Loading...</span>
+                    </span>
+                    <span class="flex items-center">
+                        <i class="fas fa-circle text-green-500 mr-1"></i>
+                        Active
+                    </span>
+                </div>
+            </div>
+            <div class="text-right">
+                <button onclick="toggleEditProfile()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors" id="editProfileBtn">
+                    <i class="fas fa-edit mr-2"></i>Edit Profile
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="editProfileModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Edit Profile</h3>
+                <button onclick="closeEditProfile()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editProfileForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input type="text" id="editUsername" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" id="editEmail" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditProfile()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Change Password</h3>
+                <button onclick="closePasswordModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="changePasswordForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                        <input type="password" id="currentPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                        <input type="password" id="newPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" required minlength="6">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" required minlength="6">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closePasswordModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                        Change Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column - Statistics -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Chat Statistics -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-chart-bar text-primary mr-2"></i>
+                        Chat Statistics
+                    </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-comments text-blue-500"></i>
+                            <span class="text-sm text-gray-600">Total Messages</span>
+                        </div>
+                        <span class="font-semibold text-gray-900" id="totalMessages">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-smile text-green-500"></i>
+                            <span class="text-sm text-gray-600">Avg Sentiment</span>
+                        </div>
+                        <span class="font-semibold text-gray-900" id="avgSentiment">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-lightbulb text-yellow-500"></i>
+                            <span class="text-sm text-gray-600">Top Intent</span>
+                        </div>
+                        <span class="font-semibold text-gray-900" id="topIntent">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-clock text-purple-500"></i>
+                            <span class="text-sm text-gray-600">Sessions Today</span>
+                        </div>
+                        <span class="font-semibold text-gray-900" id="sessionsToday">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Info -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-user text-primary mr-2"></i>
+                        Account Info
+                    </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="text-sm text-gray-600">Username</label>
+                        <p class="font-medium text-gray-900" id="accountUsername">Loading...</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-600">Email</label>
+                        <p class="font-medium text-gray-900" id="accountEmail">Loading...</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-600">Account Type</label>
+                        <p class="font-medium text-gray-900">
+                            {% if session.is_admin %}
+                                <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">Admin</span>
+                            {% else %}
+                                <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">User</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-600">Last Login</label>
+                        <p class="font-medium text-gray-900" id="lastLogin">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-bolt text-primary mr-2"></i>
+                        Quick Actions
+                    </h3>
+                </div>
+                <div class="p-6 space-y-3">
+                    <button onclick="openPasswordModal()" class="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                        <div class="flex items-center">
+                            <i class="fas fa-key text-gray-600 mr-3"></i>
+                            <span class="text-sm text-gray-800">Change Password</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button onclick="exportData()" class="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                        <div class="flex items-center">
+                            <i class="fas fa-download text-gray-600 mr-3"></i>
+                            <span class="text-sm text-gray-800">Export My Data</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button onclick="clearHistory()" class="w-full flex items-center justify-between p-3 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                        <div class="flex items-center">
+                            <i class="fas fa-trash text-red-600 mr-3"></i>
+                            <span class="text-sm text-red-800">Clear Chat History</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Settings & History -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- User Settings -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-cog text-primary mr-2"></i>
+                        User Preferences
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <form id="preferencesForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Chat Theme</label>
+                                <select id="chatTheme" name="chat_theme" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="auto">Auto</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Language</label>
+                                <select id="language" name="language" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="en">English</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Email Notifications</label>
+                                    <p class="text-xs text-gray-500">Receive updates about your account</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="emailNotifications" name="email_notifications" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Show Sentiment Analysis</label>
+                                    <p class="text-xs text-gray-500">Display emotion indicators during chat</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="showSentiment" name="show_sentiment" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Auto-save Conversations</label>
+                                    <p class="text-xs text-gray-500">Automatically save chat history</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="autoSave" name="auto_save" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                Save Preferences
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            <i class="fas fa-history text-primary mr-2"></i>
+                            Recent Activity
+                        </h3>
+                        <button onclick="viewAllHistory()" class="text-sm text-primary hover:text-blue-600 transition-colors">
+                            View All
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div id="recentActivity" class="space-y-4">
+                        <!-- Activity items will be loaded here -->
+                        <div class="text-center text-gray-500 py-4">
+                            <i class="fas fa-spinner fa-spin mb-2"></i>
+                            <p>Loading recent activity...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Profile page functionality
+let userInfo = {};
+
+// Profile editing functions
+function toggleEditProfile() {
+    const modal = document.getElementById('editProfileModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // Pre-fill form with current values
+    document.getElementById('editUsername').value = userInfo.username || '';
+    document.getElementById('editEmail').value = userInfo.email || '';
+}
+
+function closeEditProfile() {
+    const modal = document.getElementById('editProfileModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function openPasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    // Clear form
+    document.getElementById('changePasswordForm').reset();
+}
+
+// Form submissions
+document.getElementById('editProfileForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        username: document.getElementById('editUsername').value.trim(),
+        email: document.getElementById('editEmail').value.trim()
+    };
+    
+    if (!formData.username || !formData.email) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    fetch('/api/user/update-profile', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            closeEditProfile();
+            // Refresh user info
+            loadUserInfo();
+            // Update header display
+            document.getElementById('displayUsername').textContent = formData.username;
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating profile:', error);
+        showNotification('Error updating profile. Please try again.', 'error');
+    });
+});
+
+document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showNotification('New passwords do not match', 'error');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        showNotification('New password must be at least 6 characters', 'error');
+        return;
+    }
+    
+    fetch('/api/user/change-password', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            closePasswordModal();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error changing password:', error);
+        showNotification('Error changing password. Please try again.', 'error');
+    });
+});
+
+document.getElementById('preferencesForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const preferences = {};
+    
+    // Get form values
+    preferences.chat_theme = document.getElementById('chatTheme').value;
+    preferences.language = document.getElementById('language').value;
+    preferences.email_notifications = document.getElementById('emailNotifications').checked;
+    preferences.show_sentiment = document.getElementById('showSentiment').checked;
+    preferences.auto_save = document.getElementById('autoSave').checked;
+    
+    fetch('/api/user/preferences', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(preferences)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+        } else {
+            showNotification(data.message || 'Error saving preferences', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving preferences:', error);
+        showNotification('Error saving preferences. Please try again.', 'error');
+    });
+});
+
+// Utility functions
+function exportData() {
+    fetch('/api/user/export-data', { method: 'POST' })
+        .then(response => response.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my-chatbot-data.json';
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showNotification('Data exported successfully', 'success');
+        })
+        .catch(error => {
+            console.error('Error exporting data:', error);
+            showNotification('Error exporting data. Please try again.', 'error');
+        });
+}
+
+function clearHistory() {
+    if (confirm('Are you sure you want to clear all your chat history? This action cannot be undone.')) {
+        fetch('/api/user/clear-history', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Chat history cleared successfully', 'success');
+                    loadUserStats(); // Refresh stats
+                } else {
+                    showNotification('Error clearing history: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error clearing history:', error);
+                showNotification('Error clearing history. Please try again.', 'error');
+            });
+    }
+}
+
+function viewAllHistory() {
+    window.open('/user/history', '_blank');
+}
+
+// Data loading functions
+function loadUserInfo() {
+    fetch('/api/user/info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading user info:', data.error);
+                return;
+            }
+            
+            userInfo = data;
+            
+            // Update account info display
+            document.getElementById('accountUsername').textContent = data.username || 'Not set';
+            document.getElementById('accountEmail').textContent = data.email || 'Not set';
+            document.getElementById('displayUsername').textContent = data.username || 'User';
+            
+            // Format and display member since date
+            if (data.created_at) {
+                const date = new Date(data.created_at);
+                document.getElementById('memberSince').textContent = date.toLocaleDateString();
+            } else {
+                document.getElementById('memberSince').textContent = 'Unknown';
+            }
+            
+            // Format and display last login
+            if (data.last_login) {
+                const date = new Date(data.last_login);
+                document.getElementById('lastLogin').textContent = date.toLocaleString();
+            } else {
+                document.getElementById('lastLogin').textContent = 'Never';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading user info:', error);
+            document.getElementById('accountUsername').textContent = 'Error loading';
+            document.getElementById('accountEmail').textContent = 'Error loading';
+            document.getElementById('memberSince').textContent = 'Error loading';
+            document.getElementById('lastLogin').textContent = 'Error loading';
+        });
+}
+
+function loadUserStats() {
+    fetch('/api/user/stats')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('totalMessages').textContent = data.total_messages || 0;
+            document.getElementById('avgSentiment').textContent = data.avg_sentiment || '0.0';
+            document.getElementById('topIntent').textContent = data.top_intent || 'None';
+            document.getElementById('sessionsToday').textContent = data.sessions_today || 0;
+        })
+        .catch(error => {
+            console.error('Error loading user stats:', error);
+            document.getElementById('totalMessages').textContent = 'Error';
+            document.getElementById('avgSentiment').textContent = 'Error';
+            document.getElementById('topIntent').textContent = 'Error';
+            document.getElementById('sessionsToday').textContent = 'Error';
+        });
+}
+
+function loadUserPreferences() {
+    fetch('/api/user/preferences')
+        .then(response => response.json())
+        .then(data => {
+            // Set form values based on loaded preferences
+            if (data.chat_theme) {
+                document.getElementById('chatTheme').value = data.chat_theme;
+            }
+            if (data.language) {
+                document.getElementById('language').value = data.language;
+            }
+            if (data.email_notifications !== undefined) {
+                document.getElementById('emailNotifications').checked = data.email_notifications === 'true';
+            }
+            if (data.show_sentiment !== undefined) {
+                document.getElementById('showSentiment').checked = data.show_sentiment === 'true';
+            }
+            if (data.auto_save !== undefined) {
+                document.getElementById('autoSave').checked = data.auto_save === 'true';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading user preferences:', error);
+            // Set default values if loading fails
+            document.getElementById('emailNotifications').checked = true;
+            document.getElementById('showSentiment').checked = true;
+            document.getElementById('autoSave').checked = true;
+        });
+}
+
+function loadRecentActivity() {
+    fetch('/api/user/activity')
+        .then(response => response.json())
+        .then(activities => {
+            const container = document.getElementById('recentActivity');
+            
+            if (activities.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-inbox text-2xl mb-2"></i>
+                        <p>No recent activity</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = activities.map(activity => `
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div class="w-8 h-8 bg-${activity.color}-100 rounded-full flex items-center justify-center">
+                        <i class="${activity.icon} text-${activity.color}-600 text-xs"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-800">${activity.description}</p>
+                        <p class="text-xs text-gray-500">${activity.time_ago}</p>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(error => {
+            console.error('Error loading recent activity:', error);
+            document.getElementById('recentActivity').innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    <i class="fas fa-exclamation-triangle mb-2"></i>
+                    <p>Error loading activity</p>
+                </div>
+            `;
+        });
+}
+
+// Notification function
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm ${
+        type === 'error' ? 'bg-red-500 text-white' :
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'warning' ? 'bg-yellow-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas ${
+                type === 'error' ? 'fa-exclamation-circle' :
+                type === 'success' ? 'fa-check-circle' :
+                type === 'warning' ? 'fa-exclamation-triangle' :
+                'fa-info-circle'
+            } mr-2"></i>
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Close modals when clicking outside
+document.addEventListener('click', function(event) {
+    const editModal = document.getElementById('editProfileModal');
+    const passwordModal = document.getElementById('changePasswordModal');
+    
+    if (event.target === editModal) {
+        closeEditProfile();
+    }
+    if (event.target === passwordModal) {
+        closePasswordModal();
+    }
+});
+
+// Initialize profile page
+document.addEventListener('DOMContentLoaded', function() {
+    loadUserInfo();
+    loadUserStats();
+    loadUserPreferences();
+    loadRecentActivity();
+});
+</script>
+{% endblock %}

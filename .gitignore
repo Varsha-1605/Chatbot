@@ -1,0 +1,17 @@
+# Environment variables
+.env
+.venv
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Data, logs, and uploads
+# These will be handled by Render's services
+database/
+uploads/
+logs/
+
+# IDE settings
+.vscode/
+.idea/

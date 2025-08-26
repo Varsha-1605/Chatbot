@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Chat History - Dynamic AI Chatbot{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-history text-primary mr-2"></i>
+            Chat History
+        </h1>
+        <p class="text-gray-600">Browse through your previous conversations with the AI assistant</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 border border-gray-200">
+        <div class="flex flex-wrap items-center gap-4">
+            <div>
+                <label class="text-sm text-gray-600 mr-2">Date Range:</label>
+                <select id="dateFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600 mr-2">Sentiment:</label>
+                <select id="sentimentFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="all">All</option>
+                    <option value="positive">Positive</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="negative">Negative</option>
+                </select>
+            </div>
+            <div>
+                <input type="text" id="searchInput" placeholder="Search conversations..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-64">
+            </div>
+            <div class="ml-auto">
+                <button onclick="clearAllHistory()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm">
+                    <i class="fas fa-trash mr-2"></i>Clear All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversation List -->
+    <div class="space-y-4" id="conversationList">
+        {% for conversation in conversations %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 conversation-item" data-session="{{ conversation[0] }}">
+            <div class="p-4">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-gray-600 text-sm"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-900">You</p>
+                            <p class="text-xs text-gray-500">{{ conversation[3] }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        {% if conversation[4] %}
+                            {% if conversation[4] > 0 %}
+                            <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                                <i class="fas fa-smile mr-1"></i>Positive
+                            </span>
+                            {% elif conversation[4] < -0.1 %}
+                            <span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+                                <i class="fas fa-frown mr-1"></i>Negative
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                <i class="fas fa-meh mr-1"></i>Neutral
+                            </span>
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% if conversation[5] %}
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                            {{ conversation[5].title() }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <p class="text-sm text-gray-800">{{ conversation[1][:200] }}{% if conversation[1]|length > 200 %}...{% endif %}</p>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="flex items-start space-x-2">
+                            <div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800">{{ conversation[2][:200] }}{% if conversation[2]|length > 200 %}...{% endif %}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
+                    <span class="text-xs text-gray-500">Session: {{ conversation[0][:8] }}...</span>
+                    <div class="flex space-x-2">
+                        <button onclick="viewFullConversation('{{ conversation[0] }}')" class="text-primary hover:text-blue-600 text-sm">
+                            <i class="fas fa-eye mr-1"></i>View Full
+                        </button>
+                        <button onclick="deleteConversation('{{ conversation[0] }}')" class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <i class="fas fa-inbox text-4xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No conversations found</h3>
+            <p class="text-gray-600">Start chatting with the AI assistant to see your history here.</p>
+            <a href="{{ url_for('index') }}" class="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                Start Chatting
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if conversations|length >= 50 %}
+    <div class="flex justify-center mt-8">
+        <div class="flex space-x-2">
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-chevron-left mr-2"></i>Previous
+            </button>
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Next<i class="fas fa-chevron-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Full Conversation Modal -->
+<div id="conversationModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">Full Conversation</h3>
+            <button onclick="closeConversationModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6 overflow-y-auto max-h-[60vh]" id="fullConversationContent">
+            <!-- Full conversation content will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<script>
+function viewFullConversation(sessionId) {
+    // This would fetch the full conversation details
+    document.getElementById('conversationModal').classList.remove('hidden');
+    document.getElementById('conversationModal').classList.add('flex');
+    
+    // Mock full conversation display
+    document.getElementById('fullConversationContent').innerHTML = `
+        <div class="space-y-4">
+            <div class="text-center text-gray-500 py-4">
+                <i class="fas fa-spinner fa-spin mb-2"></i>
+                <p>Loading full conversation...</p>
+            </div>
+        </div>
+    `;
+    
+    // Here you would make an API call to get the full conversation
+    // For now, we'll just show a placeholder
+    setTimeout(() => {
+        document.getElementById('fullConversationContent').innerHTML = `
+            <div class="space-y-4">
+                <div class="flex justify-end">
+                    <div class="bg-blue-500 text-white p-3 rounded-lg max-w-md">
+                        <p>Hello! How can you help me today?</p>
+                        <span class="text-xs opacity-75 mt-1 block">2:30 PM</span>
+                    </div>
+                </div>
+                <div class="flex">
+                    <div class="bg-gray-100 p-3 rounded-lg max-w-md">
+                        <p>Hello! I'm here to help you with various tasks. What would you like assistance with?</p>
+                        <span class="text-xs text-gray-500 mt-1 block">2:30 PM</span>
+                    </div>
+                </div>
+                <!-- More messages would be loaded here -->
+            </div>
+        `;
+    }, 1000);
+}
+
+function closeConversationModal() {
+    document.getElementById('conversationModal').classList.add('hidden');
+    document.getElementById('conversationModal').classList.remove('flex');
+}
+
+function deleteConversation(sessionId) {
+    if (confirm('Are you sure you want to delete this conversation?')) {
+        // Here you would make an API call to delete the specific conversation
+        // For now, we'll just remove it from the UI
+        const conversationElement = document.querySelector(`[data-session="${sessionId}"]`);
+        if (conversationElement) {
+            conversationElement.remove();
+            showNotification('Conversation deleted successfully', 'success');
+        }
+    }
+}
+
+function clearAllHistory() {
+    if (confirm('Are you sure you want to clear all your chat history? This action cannot be undone.')) {
+        fetch('/api/user/clear-history', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('All chat history cleared successfully', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showNotification('Error clearing history: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error clearing history:', error);
+                showNotification('Error clearing history. Please try again.', 'error');
+            });
+    }
+}
+
+// Filter and search functionality
+document.getElementById('searchInput').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const conversations = document.querySelectorAll('.conversation-item');
+    
+    conversations.forEach(conv => {
+        const text = conv.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            conv.style.display = 'block';
+        } else {
+            conv.style.display = 'none';
+        }
+    });
+});
+
+// Notification function
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm ${
+        type === 'error' ? 'bg-red-500 text-white' :
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'warning' ? 'bg-yellow-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas ${
+                type === 'error' ? 'fa-exclamation-circle' :
+                type === 'success' ? 'fa-check-circle' :
+                type === 'warning' ? 'fa-exclamation-triangle' :
+                'fa-info-circle'
+            } mr-2"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('conversationModal');
+    if (event.target === modal) {
+        closeConversationModal();
+    }
+});
+</script>
+{% endblock %}

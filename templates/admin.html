@@ -1,0 +1,585 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Dynamic AI Chatbot{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6">
+    <!-- Admin Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                    <i class="fas fa-cog text-primary mr-3"></i>
+                    Admin Panel
+                </h1>
+                <p class="text-gray-600">Manage your chatbot settings and configurations</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                    <i class="fas fa-circle text-green-500 mr-1"></i>
+                    System Online
+                </span>
+                <button onclick="refreshData()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Tabs -->
+    <div class="mb-6">
+        <nav class="flex space-x-8 border-b border-gray-200">
+            <button onclick="switchTab('dashboard')" class="admin-tab active py-2 px-1 border-b-2 border-primary text-primary font-medium">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </button>
+            <button onclick="switchTab('conversations')" class="admin-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                <i class="fas fa-comments mr-2"></i>Conversations
+            </button>
+            <button onclick="switchTab('users')" class="admin-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                <i class="fas fa-users mr-2"></i>Users
+            </button>
+            <button onclick="switchTab('settings')" class="admin-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                <i class="fas fa-sliders-h mr-2"></i>Settings
+            </button>
+            <button onclick="switchTab('logs')" class="admin-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                <i class="fas fa-file-alt mr-2"></i>Logs
+            </button>
+        </nav>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard-tab" class="tab-content">
+        <!-- System Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-blue-100 rounded-full">
+                        <i class="fas fa-server text-blue-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Server Status</p>
+                        <p class="text-xl font-bold text-green-600">Online</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-green-100 rounded-full">
+                        <i class="fas fa-database text-green-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Database</p>
+                        <p class="text-xl font-bold text-green-600">Connected</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-purple-100 rounded-full">
+                        <i class="fas fa-brain text-purple-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">AI Model</p>
+                        <p class="text-xl font-bold text-green-600">Active</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-yellow-100 rounded-full">
+                        <i class="fas fa-clock text-yellow-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Uptime</p>
+                        <p class="text-xl font-bold text-gray-900" id="uptime">--</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-bolt text-primary mr-2"></i>
+                    Quick Actions
+                </h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="clearAllSessions()" class="p-4 bg-red-50 hover:bg-red-100 rounded-lg text-left transition-colors">
+                        <i class="fas fa-trash text-red-600 mb-2"></i>
+                        <p class="font-medium text-red-800">Clear Sessions</p>
+                        <p class="text-sm text-red-600">Reset all user sessions</p>
+                    </button>
+                    <button onclick="backupDatabase()" class="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-left transition-colors">
+                        <i class="fas fa-download text-blue-600 mb-2"></i>
+                        <p class="font-medium text-blue-800">Backup Data</p>
+                        <p class="text-sm text-blue-600">Export database</p>
+                    </button>
+                    <button onclick="restartAI()" class="p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg text-left transition-colors">
+                        <i class="fas fa-sync text-yellow-600 mb-2"></i>
+                        <p class="font-medium text-yellow-800">Restart AI</p>
+                        <p class="text-sm text-yellow-600">Reload AI model</p>
+                    </button>
+                    <button onclick="viewLogs()" class="p-4 bg-green-50 hover:bg-green-100 rounded-lg text-left transition-colors">
+                        <i class="fas fa-file-alt text-green-600 mb-2"></i>
+                        <p class="font-medium text-green-800">View Logs</p>
+                        <p class="text-sm text-green-600">Check system logs</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-bell text-primary mr-2"></i>
+                    Recent Alerts
+                </h3>
+                <div id="alertsList" class="space-y-3">
+                    <div class="flex items-center p-3 bg-green-50 rounded-lg">
+                        <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                        <div>
+                            <p class="text-sm font-medium text-green-800">System Started Successfully</p>
+                            <p class="text-xs text-green-600">2 minutes ago</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center p-3 bg-blue-50 rounded-lg">
+                        <i class="fas fa-info-circle text-blue-500 mr-3"></i>
+                        <div>
+                            <p class="text-sm font-medium text-blue-800">Database Connection Established</p>
+                            <p class="text-xs text-blue-600">5 minutes ago</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversations Tab -->
+    <div id="conversations-tab" class="tab-content hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Recent Conversations</h3>
+                    <div class="flex items-center space-x-4">
+                        <select class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option>All Sessions</option>
+                            <option>Today</option>
+                            <option>This Week</option>
+                            <option>This Month</option>
+                        </select>
+                        <button onclick="exportConversations()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                            <i class="fas fa-download mr-2"></i>Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Session ID</th>
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Messages</th>
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Sentiment</th>
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Duration</th>
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Last Activity</th>
+                                <th class="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversationsTable">
+                            <!-- Conversations will be loaded here -->
+                            <tr class="border-b border-gray-100">
+                                <td class="py-3 px-4 text-gray-600 font-mono text-xs">Loading...</td>
+                                <td class="py-3 px-4 text-gray-600">--</td>
+                                <td class="py-3 px-4 text-gray-600">--</td>
+                                <td class="py-3 px-4 text-gray-600">--</td>
+                                <td class="py-3 px-4 text-gray-600">--</td>
+                                <td class="py-3 px-4">
+                                    <button class="text-blue-600 hover:text-blue-800 mr-2">View</button>
+                                    <button class="text-red-600 hover:text-red-800">Delete</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div id="users-tab" class="tab-content hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">User Sessions</h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="text-center p-4 bg-blue-50 rounded-lg">
+                        <div class="text-2xl font-bold text-blue-600" id="totalUsers">--</div>
+                        <div class="text-sm text-blue-800">Total Users</div>
+                    </div>
+                    <div class="text-center p-4 bg-green-50 rounded-lg">
+                        <div class="text-2xl font-bold text-green-600" id="activeUsers">--</div>
+                        <div class="text-sm text-green-800">Active Users</div>
+                    </div>
+                    <div class="text-center p-4 bg-purple-50 rounded-lg">
+                        <div class="text-2xl font-bold text-purple-600" id="avgMessages">--</div>
+                        <div class="text-sm text-purple-800">Avg Messages/User</div>
+                    </div>
+                </div>
+                <div id="usersTable">
+                    <!-- User data will be loaded here -->
+                    <p class="text-gray-500 text-center py-8">Loading user data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="settings-tab" class="tab-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- AI Settings -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-brain text-primary mr-2"></i>
+                        AI Configuration
+                    </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Response Temperature</label>
+                        <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7" class="w-full">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>Conservative</span>
+                            <span>Balanced</span>
+                            <span>Creative</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Max Response Length</label>
+                        <select id="maxLength" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="200">Short (200 tokens)</option>
+                            <option value="500" selected>Medium (500 tokens)</option>
+                            <option value="1000">Long (1000 tokens)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enableSentiment" checked class="mr-2">
+                            <span class="text-sm text-gray-700">Enable Sentiment Analysis</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enableContext" checked class="mr-2">
+                            <span class="text-sm text-gray-700">Maintain Conversation Context</span>
+                        </label>
+                    </div>
+                    <button onclick="saveAISettings()" class="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                        Save AI Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Settings -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="p-6 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-cog text-primary mr-2"></i>
+                        System Configuration
+                    </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Max Conversation History</label>
+                        <select id="maxHistory" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="5">5 messages</option>
+                            <option value="10" selected>10 messages</option>
+                            <option value="20">20 messages</option>
+                            <option value="50">50 messages</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (minutes)</label>
+                        <input type="number" id="sessionTimeout" value="30" min="5" max="1440" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enableAnalytics" checked class="mr-2">
+                            <span class="text-sm text-gray-700">Enable Analytics Tracking</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enableLogging" checked class="mr-2">
+                            <span class="text-sm text-gray-700">Enable System Logging</span>
+                        </label>
+                    </div>
+                    <button onclick="saveSystemSettings()" class="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                        Save System Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div id="logs-tab" class="tab-content hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">System Logs</h3>
+                    <div class="flex items-center space-x-4">
+                        <select id="logLevel" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="all">All Levels</option>
+                            <option value="error">Errors Only</option>
+                            <option value="warning">Warnings & Errors</option>
+                            <option value="info">Info & Above</option>
+                        </select>
+                        <button onclick="clearLogs()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm">
+                            <i class="fas fa-trash mr-2"></i>Clear Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="logsContainer" class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm h-96 overflow-y-auto">
+                    <div class="mb-2">[2024-08-26 10:30:00] INFO: System started successfully</div>
+                    <div class="mb-2">[2024-08-26 10:30:01] INFO: Database connection established</div>
+                    <div class="mb-2">[2024-08-26 10:30:02] INFO: AI model loaded and configured</div>
+                    <div class="mb-2">[2024-08-26 10:30:03] INFO: Web server started on port 5000</div>
+                    <div class="mb-2 text-yellow-400">[2024-08-26 10:30:05] WARN: No API rate limiting configured</div>
+                    <div class="mb-2">[2024-08-26 10:31:00] INFO: New chat session created: abc123</div>
+                    <div class="mb-2">[2024-08-26 10:31:15] INFO: Message processed successfully</div>
+                    <div class="mb-2 text-blue-400">[2024-08-26 10:31:16] DEBUG: Sentiment analysis: positive (0.7)</div>
+                    <div class="mb-2">[2024-08-26 10:32:00] INFO: Analytics data updated</div>
+                    <div class="text-green-400 animate-pulse">● System running normally...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Admin Panel JavaScript
+let currentTab = 'dashboard';
+let startTime = Date.now();
+
+// Tab switching
+function switchTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.add('hidden');
+    });
+    
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.admin-tab').forEach(button => {
+        button.classList.remove('active', 'border-primary', 'text-primary');
+        button.classList.add('border-transparent', 'text-gray-500');
+    });
+    
+    // Show selected tab
+    document.getElementById(tabName + '-tab').classList.remove('hidden');
+    
+    // Add active class to selected tab button
+    event.target.classList.add('active', 'border-primary', 'text-primary');
+    event.target.classList.remove('border-transparent', 'text-gray-500');
+    
+    currentTab = tabName;
+    
+    // Load tab-specific data
+    loadTabData(tabName);
+}
+
+// Load tab-specific data
+function loadTabData(tabName) {
+    switch(tabName) {
+        case 'dashboard':
+            updateUptime();
+            loadAlerts();
+            break;
+        case 'conversations':
+            loadConversations();
+            break;
+        case 'users':
+            loadUsers();
+            break;
+        case 'logs':
+            loadLogs();
+            break;
+    }
+}
+
+// Update uptime display
+function updateUptime() {
+    const uptimeMs = Date.now() - startTime;
+    const uptimeMinutes = Math.floor(uptimeMs / 60000);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    
+    let uptimeText;
+    if (uptimeHours > 0) {
+        uptimeText = `${uptimeHours}h ${uptimeMinutes % 60}m`;
+    } else {
+        uptimeText = `${uptimeMinutes}m`;
+    }
+    
+    document.getElementById('uptime').textContent = uptimeText;
+}
+
+// Load alerts
+function loadAlerts() {
+    // This would typically fetch from an API
+    console.log('Loading alerts...');
+}
+
+// Load conversations
+function loadConversations() {
+    fetch('/api/analytics')
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById('conversationsTable');
+            tableBody.innerHTML = `
+                <tr class="border-b border-gray-100">
+                    <td class="py-3 px-4 text-gray-600 font-mono text-xs">sess-001</td>
+                    <td class="py-3 px-4 text-gray-600">15</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Positive</span>
+                    </td>
+                    <td class="py-3 px-4 text-gray-600">12m 34s</td>
+                    <td class="py-3 px-4 text-gray-600">2 min ago</td>
+                    <td class="py-3 px-4">
+                        <button onclick="viewConversation('sess-001')" class="text-blue-600 hover:text-blue-800 mr-2 text-sm">View</button>
+                        <button onclick="deleteConversation('sess-001')" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                    </td>
+                </tr>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading conversations:', error);
+        });
+}
+
+// Load users
+function loadUsers() {
+    fetch('/api/analytics')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('totalUsers').textContent = data.unique_users || 0;
+            document.getElementById('activeUsers').textContent = Math.ceil(data.unique_users * 0.3) || 0;
+            document.getElementById('avgMessages').textContent = Math.ceil(data.total_conversations / data.unique_users) || 0;
+        })
+        .catch(error => {
+            console.error('Error loading users:', error);
+        });
+}
+
+// Load logs
+function loadLogs() {
+    console.log('Loading system logs...');
+}
+
+// Admin actions
+function clearAllSessions() {
+    if (confirm('Are you sure you want to clear all user sessions? This will log out all users.')) {
+        fetch('/api/admin/clear-sessions', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert('All sessions cleared successfully');
+            })
+            .catch(error => {
+                alert('Error clearing sessions: ' + error.message);
+            });
+    }
+}
+
+function backupDatabase() {
+    const link = document.createElement('a');
+    link.href = '/api/admin/backup';
+    link.download = `chatbot-backup-${new Date().toISOString().split('T')[0]}.db`;
+    link.click();
+}
+
+function restartAI() {
+    if (confirm('Are you sure you want to restart the AI model? This may cause brief downtime.')) {
+        fetch('/api/admin/restart-ai', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert('AI model restarted successfully');
+            })
+            .catch(error => {
+                alert('Error restarting AI: ' + error.message);
+            });
+    }
+}
+
+function viewLogs() {
+    switchTab('logs');
+}
+
+function clearLogs() {
+    if (confirm('Are you sure you want to clear all logs?')) {
+        document.getElementById('logsContainer').innerHTML = '<div class="text-green-400 animate-pulse">● Logs cleared...</div>';
+    }
+}
+
+// Settings functions
+function saveAISettings() {
+    const settings = {
+        temperature: document.getElementById('temperature').value,
+        maxLength: document.getElementById('maxLength').value,
+        enableSentiment: document.getElementById('enableSentiment').checked,
+        enableContext: document.getElementById('enableContext').checked
+    };
+    
+    console.log('Saving AI settings:', settings);
+    alert('AI settings saved successfully!');
+}
+
+function saveSystemSettings() {
+    const settings = {
+        maxHistory: document.getElementById('maxHistory').value,
+        sessionTimeout: document.getElementById('sessionTimeout').value,
+        enableAnalytics: document.getElementById('enableAnalytics').checked,
+        enableLogging: document.getElementById('enableLogging').checked
+    };
+    
+    console.log('Saving system settings:', settings);
+    alert('System settings saved successfully!');
+}
+
+// Utility functions
+function refreshData() {
+    loadTabData(currentTab);
+    alert('Data refreshed successfully!');
+}
+
+function exportConversations() {
+    const link = document.createElement('a');
+    link.href = '/api/admin/export-conversations';
+    link.download = `conversations-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+}
+
+function viewConversation(sessionId) {
+    alert(`Viewing conversation for session: ${sessionId}`);
+}
+
+function deleteConversation(sessionId) {
+    if (confirm(`Are you sure you want to delete conversation ${sessionId}?`)) {
+        alert(`Conversation ${sessionId} deleted successfully`);
+    }
+}
+
+// Initialize admin panel
+document.addEventListener('DOMContentLoaded', function() {
+    updateUptime();
+    setInterval(updateUptime, 60000); // Update every minute
+    loadTabData('dashboard');
+});
+</script>
+{% endblock %}

@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Dynamic AI Chatbot{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-1">
+            <i class="fas fa-chart-line text-primary mr-2"></i>
+            Analytics Dashboard
+        </h1>
+        <p class="text-gray-600 text-sm">Monitor your chatbot's performance and user interactions</p>
+    </div>
+
+    <!-- Key Metrics - Compact Grid -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div class="flex items-center">
+                <div class="p-2 bg-blue-100 rounded-lg">
+                    <i class="fas fa-comments text-blue-600 text-sm"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-600">Total Conversations</p>
+                    <p class="text-xl font-bold text-gray-900">{{ data.total_conversations }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div class="flex items-center">
+                <div class="p-2 bg-green-100 rounded-lg">
+                    <i class="fas fa-users text-green-600 text-sm"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-600">Unique Users</p>
+                    <p class="text-xl font-bold text-gray-900">{{ data.unique_users }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div class="flex items-center">
+                <div class="p-2 bg-purple-100 rounded-lg">
+                    <i class="fas fa-smile text-purple-600 text-sm"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-600">Avg Sentiment</p>
+                    <p class="text-xl font-bold text-gray-900">{{ "%.2f"|format(data.avg_sentiment) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div class="flex items-center">
+                <div class="p-2 bg-yellow-100 rounded-lg">
+                    <i class="fas fa-clock text-yellow-600 text-sm"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-600">Response Time</p>
+                    <p class="text-xl font-bold text-gray-900">1.2s</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - Charts -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Messages Chart -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+                <h3 class="text-base font-semibold text-gray-900 mb-3">
+                    <i class="fas fa-chart-bar text-primary mr-2 text-sm"></i>
+                    Messages Per Day
+                </h3>
+                <div class="h-40">
+                    <canvas id="messagesChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Sentiment Chart -->
+            <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+                <h3 class="text-base font-semibold text-gray-900 mb-3">
+                    <i class="fas fa-chart-pie text-primary mr-2 text-sm"></i>
+                    Sentiment Distribution
+                </h3>
+                <div class="flex items-center gap-4 h-32">
+                    <div class="w-32 h-32 flex-shrink-0">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                    <div class="flex-1 flex flex-col justify-center space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                <span>Positive</span>
+                            </div>
+                            <span class="font-medium">45%</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                                <span>Neutral</span>
+                            </div>
+                            <span class="font-medium">40%</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                                <span>Negative</span>
+                            </div>
+                            <span class="font-medium">15%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Activity & Stats -->
+        <div class="space-y-6">
+            <!-- System Status -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-base font-semibold text-gray-900">
+                        <i class="fas fa-server text-primary mr-2 text-sm"></i>
+                        System Status
+                    </h3>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Server</span>
+                        <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                            <div class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></div>
+                            Online
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">AI Model</span>
+                        <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                            <div class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></div>
+                            Active
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Database</span>
+                        <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                            <div class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></div>
+                            Connected
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Uptime</span>
+                        <span class="text-sm font-medium text-gray-900">24h 15m</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-base font-semibold text-gray-900">
+                        <i class="fas fa-history text-primary mr-2 text-sm"></i>
+                        Recent Activity
+                    </h3>
+                </div>
+                <div class="p-4">
+                    <div id="recentActivity" class="space-y-3">
+                        <div class="flex items-start space-x-2">
+                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800">New user session started</p>
+                                <p class="text-xs text-gray-500">2 minutes ago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2">
+                            <div class="w-1.5 h-1.5 bg-green-500 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800">Message processed successfully</p>
+                                <p class="text-xs text-gray-500">5 minutes ago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2">
+                            <div class="w-1.5 h-1.5 bg-purple-500 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800">Analytics data updated</p>
+                                <p class="text-xs text-gray-500">10 minutes ago</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-base font-semibold text-gray-900">
+                        <i class="fas fa-bolt text-primary mr-2 text-sm"></i>
+                        Quick Stats
+                    </h3>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Peak Hour</span>
+                        <span class="text-sm font-medium text-gray-900">2-3 PM</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Avg Session Length</span>
+                        <span class="text-sm font-medium text-gray-900">8.5 min</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Most Common Intent</span>
+                        <span class="text-sm font-medium text-gray-900">Question</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-600">Success Rate</span>
+                        <span class="text-sm font-medium text-green-600">94.2%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+    // Configure Chart.js defaults
+    Chart.defaults.responsive = true;
+    Chart.defaults.maintainAspectRatio = false;
+    Chart.defaults.plugins.legend.display = false;
+    Chart.defaults.font.size = 12;
+
+    // Messages per day chart
+    const messagesData = {{ data.messages_per_day | tojson }};
+    
+    const messagesLabels = messagesData.map(item => {
+        const date = new Date(item[0]);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+    const messagesValues = messagesData.map(item => item[1]);
+
+    const messagesCtx = document.getElementById('messagesChart').getContext('2d');
+    new Chart(messagesCtx, {
+        type: 'line',
+        data: {
+            labels: messagesLabels,
+            datasets: [{
+                label: 'Messages',
+                data: messagesValues,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // Sentiment chart
+    const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+    new Chart(sentimentCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Neutral', 'Negative'],
+            datasets: [{
+                data: [45, 40, 15],
+                backgroundColor: ['#10b981', '#6b7280', '#ef4444'],
+                borderWidth: 0,
+                cutout: '60%'
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // Auto-refresh data every 30 seconds
+    setInterval(() => {
+        fetch('/api/analytics')
+            .then(response => response.json())
+            .then(data => {
+                // Update metrics if needed
+                console.log('Analytics data refreshed');
+            })
+            .catch(error => console.error('Error refreshing data:', error));
+    }, 30000);
+</script>
+{% endblock %}

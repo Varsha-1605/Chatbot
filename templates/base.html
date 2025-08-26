@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dynamic AI Chatbot{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --secondary: #8b5cf6;
+        }
+        
+        .text-primary { color: var(--primary); }
+        .bg-primary { background-color: var(--primary); }
+        .border-primary { border-color: var(--primary); }
+        .focus\:ring-primary:focus { --tw-ring-color: var(--primary); }
+        
+        /* Custom scrollbar */
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Animation for typing indicator */
+        .typing-dots {
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .typing-dots span {
+            height: 4px;
+            width: 4px;
+            background-color: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 1px;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+        
+        /* Message animation */
+        .message-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Dropdown menu */
+        .dropdown:hover .dropdown-menu {
+            display: block;
+        }
+    </style>
+    
+    <!-- Additional head content -->
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-gray-900">
+                            <i class="fas fa-robot text-primary mr-2"></i>
+                            AI Chatbot
+                        </h1>
+                    </div>
+                    
+                    <!-- Navigation Links (only show if authenticated) -->
+                    {% if session.user_id %}
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}border-primary text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-comments mr-1"></i>
+                            Chat
+                        </a>
+                        <a href="{{ url_for('analytics') }}" class="{% if request.endpoint == 'analytics' %}border-primary text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-chart-line mr-1"></i>
+                            Analytics
+                        </a>
+                        {% if session.is_admin %}
+                        <a href="{{ url_for('admin') }}" class="{% if request.endpoint == 'admin' %}border-primary text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-cog mr-1"></i>
+                            Admin
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Right side navigation -->
+                <div class="flex items-center space-x-4">
+                    {% if session.user_id %}
+                        <!-- Authenticated user menu -->
+                        <div class="flex items-center space-x-4">
+                            <!-- Status indicator -->
+                            <div class="flex items-center text-sm text-gray-500">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                Online
+                            </div>
+                            
+                            <!-- User dropdown -->
+                            <div class="relative dropdown">
+                                <button class="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg px-2 py-1">
+                                    <div class="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                                        {{ session.username[0].upper() if session.username else 'U' }}
+                                    </div>
+                                    <span class="hidden md:block text-sm font-medium">{{ session.username }}</span>
+                                    <i class="fas fa-chevron-down text-xs"></i>
+                                </button>
+                                
+                                <!-- Dropdown menu -->
+                                <div class="dropdown-menu absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 hidden">
+                                    <div class="px-4 py-2 border-b border-gray-200">
+                                        <p class="text-sm font-medium text-gray-900">{{ session.username }}</p>
+                                        <p class="text-xs text-gray-500">
+                                            {% if session.is_admin %}Administrator{% else %}User{% endif %}
+                                        </p>
+                                    </div>
+                                    
+                                    <a href="{{ url_for('profile') }}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-user mr-2 w-4"></i>
+                                        Profile
+                                    </a>
+                                    
+                                    <a href="#" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-cog mr-2 w-4"></i>
+                                        Settings
+                                    </a>
+                                    
+                                    <a href="#" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-question-circle mr-2 w-4"></i>
+                                        Help
+                                    </a>
+                                    
+                                    <div class="border-t border-gray-200 my-1"></div>
+                                    
+                                    <a href="{{ url_for('logout') }}" class="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                                        <i class="fas fa-sign-out-alt mr-2 w-4"></i>
+                                        Sign Out
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Guest user - login/register buttons -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ url_for('login') }}" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg text-sm font-medium">
+                                Sign In
+                            </a>
+                            <a href="{{ url_for('register') }}" class="bg-primary text-white hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                Sign Up
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile menu (if needed) -->
+        <div class="sm:hidden" id="mobile-menu" style="display: none;">
+            {% if session.user_id %}
+            <div class="pt-2 pb-3 space-y-1 border-t border-gray-200">
+                <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}bg-blue-50 border-primary text-primary{% else %}border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-comments mr-2"></i>Chat
+                </a>
+                <a href="{{ url_for('analytics') }}" class="{% if request.endpoint == 'analytics' %}bg-blue-50 border-primary text-primary{% else %}border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-chart-line mr-2"></i>Analytics
+                </a>
+                {% if session.is_admin %}
+                <a href="{{ url_for('admin') }}" class="{% if request.endpoint == 'admin' %}bg-blue-50 border-primary text-primary{% else %}border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-cog mr-2"></i>Admin
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Flash Messages (Global) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="fixed top-20 right-4 z-50 space-y-2">
+                {% for category, message in messages %}
+                    <div class="max-w-sm bg-white border border-gray-200 rounded-lg shadow-lg p-4 {% if category == 'error' %}border-red-200 bg-red-50{% elif category == 'success' %}border-green-200 bg-green-50{% elif category == 'warning' %}border-yellow-200 bg-yellow-50{% else %}border-blue-200 bg-blue-50{% endif %} flash-message">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas {% if category == 'error' %}fa-exclamation-circle text-red-500{% elif category == 'success' %}fa-check-circle text-green-500{% elif category == 'warning' %}fa-exclamation-triangle text-yellow-500{% else %}fa-info-circle text-blue-500{% endif %}"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium {% if category == 'error' %}text-red-800{% elif category == 'success' %}text-green-800{% elif category == 'warning' %}text-yellow-800{% else %}text-blue-800{% endif %}">
+                                    {{ message }}
+                                </p>
+                            </div>
+                            <div class="ml-auto pl-3">
+                                <button onclick="this.parentElement.parentElement.parentElement.remove()" class="{% if category == 'error' %}text-red-400 hover:text-red-600{% elif category == 'success' %}text-green-400 hover:text-green-600{% elif category == 'warning' %}text-yellow-400 hover:text-yellow-600{% else %}text-blue-400 hover:text-blue-600{% endif %}">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center text-gray-500 text-sm">
+                <p>&copy; 2024 Dynamic AI Chatbot. Powered by Google Gemini AI.</p>
+                {% if session.user_id %}
+                    <p class="mt-1">Welcome back, {{ session.username }}!</p>
+                {% endif %}
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // Global utility functions
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'error' ? 'bg-red-500 text-white' :
+                type === 'success' ? 'bg-green-500 text-white' :
+                type === 'warning' ? 'bg-yellow-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenu.style.display === 'none') {
+                mobileMenu.style.display = 'block';
+            } else {
+                mobileMenu.style.display = 'none';
+            }
+        }
+
+        // Auto-hide flash messages
+        setTimeout(() => {
+            const flashMessages = document.querySelectorAll('.flash-message');
+            flashMessages.forEach(message => {
+                message.style.opacity = '0';
+                setTimeout(() => message.remove(), 300);
+            });
+        }, 5000);
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdowns = document.querySelectorAll('.dropdown');
+            dropdowns.forEach(dropdown => {
+                if (!dropdown.contains(event.target)) {
+                    const menu = dropdown.querySelector('.dropdown-menu');
+                    if (menu) {
+                        menu.classList.add('hidden');
+                    }
+                }
+            });
+        });
+
+        // Handle dropdown clicks
+        document.querySelectorAll('.dropdown button').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const menu = this.parentElement.querySelector('.dropdown-menu');
+                if (menu) {
+                    menu.classList.toggle('hidden');
+                }
+            });
+        });
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
