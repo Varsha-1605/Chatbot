@@ -12,3 +12,8 @@ pytesseract
 pillow
 chardet
 gunicorn
+SQLAlchemy
+Flask-SQLAlchemy
+flask-migrate
+flask-sqlalchemy
+psycopg2-binary

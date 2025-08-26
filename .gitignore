@@ -1,6 +1,8 @@
 # Environment variables
 .env
 .venv
+myenv/
+instance/
 
 # Python cache
 __pycache__/

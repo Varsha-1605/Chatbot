@@ -3,7 +3,6 @@ import uuid
 import logging
 import os
 import json
-import sqlite3
 import hashlib
 import secrets
 from datetime import datetime, timedelta
@@ -12,6 +11,7 @@ import csv
 from functools import wraps
 
 from config import Config
+from models import db, User, Conversation, UserSession, Document, Analytics, FAQ, UserPreference
 from database import DatabaseManager
 from chatbot_brain import ChatbotBrain
 
@@ -41,9 +41,16 @@ logging.basicConfig(
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Initialize SQLAlchemy
+db.init_app(app)
+
 # Initialize components
 db_manager = DatabaseManager()
 chatbot_brain = ChatbotBrain()
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 # Authentication decorator
 def login_required(f):
@@ -82,59 +89,60 @@ def verify_password(password, hashed_password):
 
 def create_user(username, email, password, is_admin=False):
     """Create new user in database"""
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    cursor = conn.cursor()
-    
     try:
         # Check if user already exists
-        cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
-        if cursor.fetchone():
+        existing_user = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
+        
+        if existing_user:
             return False, "User already exists"
         
         # Create user
         user_id = str(uuid.uuid4())
         password_hash = hash_password(password)
         
-        cursor.execute('''
-            INSERT INTO users (id, username, email, password_hash, is_admin, created_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (user_id, username, email, password_hash, is_admin))
+        new_user = User(
+            id=user_id,
+            username=username,
+            email=email,
+            password_hash=password_hash,
+            is_admin=is_admin
+        )
         
-        conn.commit()
+        db.session.add(new_user)
+        db.session.commit()
+        
         return True, user_id
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error creating user: {str(e)}")
         return False, "Error creating user"
-    finally:
-        conn.close()
 
 def authenticate_user(username, password):
     """Authenticate user credentials"""
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    cursor = conn.cursor()
-    
     try:
-        cursor.execute('''
-            SELECT id, username, email, password_hash, is_admin 
-            FROM users WHERE username = ? OR email = ?
-        ''', (username, username))
+        user = User.query.filter(
+            (User.username == username) | (User.email == username)
+        ).first()
         
-        user = cursor.fetchone()
-        if user and verify_password(password, user[3]):
+        if user and verify_password(password, user.password_hash):
+            # Update last login
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            
             return {
-                'id': user[0],
-                'username': user[1],
-                'email': user[2],
-                'is_admin': bool(user[4])
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': user.is_admin
             }
         return None
         
     except Exception as e:
         logging.error(f"Error authenticating user: {str(e)}")
         return None
-    finally:
-        conn.close()
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -246,8 +254,6 @@ def profile():
     return render_template('profile.html')
 
 # API Routes (protected)
-# Update the chat endpoint to handle enhanced responses
-# Add this to your existing /api/chat route (replace the existing one)
 @app.route('/api/chat', methods=['POST'])
 @login_required
 def chat():
@@ -350,15 +356,13 @@ def clear_session():
 def admin_clear_sessions():
     """Clear all user sessions (Admin only)"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM user_sessions')
-        conn.commit()
-        conn.close()
+        UserSession.query.delete()
+        db.session.commit()
         
         logging.info(f"Admin {session.get('username')}: All sessions cleared")
         return jsonify({'status': 'All sessions cleared successfully'})
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error clearing sessions: {str(e)}")
         return jsonify({'error': 'Failed to clear sessions'}), 500
 
@@ -367,14 +371,30 @@ def admin_clear_sessions():
 def admin_backup():
     """Backup database (Admin only)"""
     try:
-        backup_filename = f"chatbot-backup-{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        backup_filename = f"chatbot-backup-{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         
-        import shutil
-        backup_path = f"database/{backup_filename}"
-        shutil.copy2(Config.DATABASE_PATH, backup_path)
+        # Export all data as JSON
+        backup_data = {
+            'users': [user.to_dict() for user in User.query.all()],
+            'conversations': [conv.to_dict() for conv in Conversation.query.all()],
+            'sessions': [session.to_dict() for session in UserSession.query.all()],
+            'documents': [doc.to_dict() for doc in Document.query.all()],
+            'analytics': [anal.to_dict() for anal in Analytics.query.all()],
+            'faq': [faq.to_dict() for faq in FAQ.query.all()],
+            'preferences': [pref.to_dict() for pref in UserPreference.query.all()],
+            'backup_date': datetime.now().isoformat()
+        }
+        
+        # Create JSON response
+        json_data = json.dumps(backup_data, indent=2, default=str)
         
         logging.info(f"Admin {session.get('username')}: Database backup created - {backup_filename}")
-        return send_file(backup_path, as_attachment=True, download_name=backup_filename)
+        
+        return Response(
+            json_data,
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={backup_filename}'}
+        )
     except Exception as e:
         logging.error(f"Error creating backup: {str(e)}")
         return jsonify({'error': 'Failed to create backup'}), 500
@@ -398,26 +418,26 @@ def admin_restart_ai():
 def admin_export_conversations():
     """Export conversations as CSV (Admin only)"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT c.session_id, c.user_message, c.bot_response, c.sentiment, c.intent, c.timestamp, u.username
-            FROM conversations c
-            LEFT JOIN users u ON c.user_id = u.id
-            ORDER BY c.timestamp DESC
-        ''')
-        
-        conversations = cursor.fetchall()
-        conn.close()
+        conversations = db.session.query(Conversation, User.username)\
+            .outerjoin(User, Conversation.user_id == User.id)\
+            .order_by(Conversation.timestamp.desc())\
+            .all()
         
         # Create CSV
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(['Session ID', 'User Message', 'Bot Response', 'Sentiment', 'Intent', 'Timestamp', 'Username'])
         
-        for conv in conversations:
-            writer.writerow(conv)
+        for conv, username in conversations:
+            writer.writerow([
+                conv.session_id, 
+                conv.user_message, 
+                conv.bot_response, 
+                conv.sentiment, 
+                conv.intent, 
+                conv.timestamp.isoformat() if conv.timestamp else '',
+                username or 'Anonymous'
+            ])
         
         output.seek(0)
         csv_data = output.getvalue()
@@ -437,35 +457,27 @@ def admin_export_conversations():
         logging.error(f"Error exporting conversations: {str(e)}")
         return jsonify({'error': 'Failed to export conversations'}), 500
 
-# Helper functions (same as before)
+# Helper functions
 def get_recent_conversations_for_admin(limit=10):
     """Get recent conversations for admin panel"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT c.session_id, c.user_message, c.bot_response, c.intent, c.sentiment, c.timestamp, u.username
-            FROM conversations c
-            LEFT JOIN users u ON c.user_id = u.id
-            ORDER BY c.timestamp DESC
-            LIMIT ?
-        ''', (limit,))
-        
-        conversations = cursor.fetchall()
-        conn.close()
+        conversations = db.session.query(Conversation, User.username)\
+            .outerjoin(User, Conversation.user_id == User.id)\
+            .order_by(Conversation.timestamp.desc())\
+            .limit(limit)\
+            .all()
         
         return [
             {
-                'session_id': conv[0],
-                'user_message': conv[1][:50] + ('...' if len(conv[1]) > 50 else ''),
-                'bot_response': conv[2][:50] + ('...' if len(conv[2]) > 50 else ''),
-                'intent': conv[3],
-                'sentiment': conv[4],
-                'timestamp': conv[5],
-                'username': conv[6] or 'Anonymous'
+                'session_id': conv.session_id,
+                'user_message': conv.user_message[:50] + ('...' if len(conv.user_message) > 50 else ''),
+                'bot_response': conv.bot_response[:50] + ('...' if len(conv.bot_response) > 50 else ''),
+                'intent': conv.intent,
+                'sentiment': conv.sentiment,
+                'timestamp': conv.timestamp.isoformat() if conv.timestamp else '',
+                'username': username or 'Anonymous'
             }
-            for conv in conversations
+            for conv, username in conversations
         ]
     except Exception as e:
         logging.error(f"Error getting recent conversations: {str(e)}")
@@ -491,8 +503,7 @@ def get_system_status():
     try:
         db_status = 'Connected'
         try:
-            conn = sqlite3.connect(Config.DATABASE_PATH)
-            conn.close()
+            db.session.execute('SELECT 1')
         except:
             db_status = 'Disconnected'
         
@@ -520,8 +531,6 @@ def get_system_status():
             'uptime': 'Unknown'
         }
 
-# Additional routes to add to app.py
-
 # User-specific API routes
 @app.route('/api/user/stats')
 @login_required
@@ -532,15 +541,11 @@ def get_user_stats():
         stats = db_manager.get_user_stats(user_id)
         
         # Add sessions today count
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COUNT(DISTINCT session_id) 
-            FROM conversations 
-            WHERE user_id = ? AND DATE(timestamp) = DATE('now')
-        ''', (user_id,))
-        sessions_today = cursor.fetchone()[0]
-        conn.close()
+        today = datetime.utcnow().date()
+        sessions_today = UserSession.query.filter(
+            UserSession.user_id == user_id,
+            db.func.date(UserSession.created_at) == today
+        ).count()
         
         stats['sessions_today'] = sessions_today
         return jsonify(stats)
@@ -563,18 +568,14 @@ def export_user_data():
         preferences = db_manager.get_user_preferences(user_id)
         
         # Get user info
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT username, email, created_at FROM users WHERE id = ?', (user_id,))
-        user_info = cursor.fetchone()
-        conn.close()
+        user = User.query.get(user_id)
         
         # Prepare export data
         export_data = {
             'user_info': {
-                'username': user_info[0] if user_info else None,
-                'email': user_info[1] if user_info else None,
-                'created_at': user_info[2] if user_info else None,
+                'username': user.username if user else None,
+                'email': user.email if user else None,
+                'created_at': user.created_at.isoformat() if user and user.created_at else None,
                 'export_date': datetime.now().isoformat()
             },
             'preferences': preferences,
@@ -616,17 +617,13 @@ def clear_user_history():
     try:
         user_id = session.get('user_id')
         
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
         # Delete user's conversations
-        cursor.execute('DELETE FROM conversations WHERE user_id = ?', (user_id,))
+        Conversation.query.filter_by(user_id=user_id).delete()
         
         # Delete user's sessions
-        cursor.execute('DELETE FROM user_sessions WHERE user_id = ?', (user_id,))
+        UserSession.query.filter_by(user_id=user_id).delete()
         
-        conn.commit()
-        conn.close()
+        db.session.commit()
         
         # Clear current session
         session.pop('session_id', None)
@@ -635,6 +632,7 @@ def clear_user_history():
         return jsonify({'success': True, 'message': 'Chat history cleared successfully'})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error clearing user history: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to clear history'}), 500
 
@@ -682,27 +680,20 @@ def change_password():
             return jsonify({'success': False, 'message': 'New password must be at least 6 characters'}), 400
         
         user_id = session.get('user_id')
+        user = User.query.get(user_id)
         
-        # Verify current password
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT password_hash FROM users WHERE id = ?', (user_id,))
-        user = cursor.fetchone()
-        
-        if not user or not verify_password(current_password, user[0]):
-            conn.close()
+        if not user or not verify_password(current_password, user.password_hash):
             return jsonify({'success': False, 'message': 'Current password is incorrect'}), 400
         
         # Update password
-        new_password_hash = hash_password(new_password)
-        cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_password_hash, user_id))
-        conn.commit()
-        conn.close()
+        user.password_hash = hash_password(new_password)
+        db.session.commit()
         
         logging.info(f"User {session.get('username')} changed password")
         return jsonify({'success': True, 'message': 'Password changed successfully'})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error changing password: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to change password'}), 500
 
@@ -712,35 +703,27 @@ def change_password():
 def admin_get_users():
     """Get all users (Admin only)"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT 
-                u.id, u.username, u.email, u.is_admin, u.created_at, u.last_login, u.is_active,
-                COUNT(c.id) as message_count,
-                MAX(c.timestamp) as last_message
-            FROM users u
-            LEFT JOIN conversations c ON u.id = c.user_id
-            GROUP BY u.id, u.username, u.email, u.is_admin, u.created_at, u.last_login, u.is_active
-            ORDER BY u.created_at DESC
-        ''')
-        
-        users = cursor.fetchall()
-        conn.close()
+        users = db.session.query(
+            User,
+            db.func.count(Conversation.id).label('message_count'),
+            db.func.max(Conversation.timestamp).label('last_message')
+        ).outerjoin(Conversation, User.id == Conversation.user_id)\
+         .group_by(User.id)\
+         .order_by(User.created_at.desc())\
+         .all()
         
         formatted_users = []
-        for user in users:
+        for user, message_count, last_message in users:
             formatted_users.append({
-                'id': user[0],
-                'username': user[1],
-                'email': user[2],
-                'is_admin': bool(user[3]),
-                'created_at': user[4],
-                'last_login': user[5],
-                'is_active': bool(user[6]),
-                'message_count': user[7] or 0,
-                'last_message': user[8]
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': user.is_admin,
+                'is_active': user.is_active,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'message_count': message_count or 0,
+                'last_message': last_message.isoformat() if last_message else None
             })
         
         return jsonify(formatted_users)
@@ -754,27 +737,19 @@ def admin_get_users():
 def admin_toggle_user_status(user_id):
     """Toggle user active status (Admin only)"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # Get current status
-        cursor.execute('SELECT is_active FROM users WHERE id = ?', (user_id,))
-        user = cursor.fetchone()
-        
+        user = User.query.get(user_id)
         if not user:
-            conn.close()
             return jsonify({'error': 'User not found'}), 404
         
         # Toggle status
-        new_status = not bool(user[0])
-        cursor.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_status, user_id))
-        conn.commit()
-        conn.close()
+        user.is_active = not user.is_active
+        db.session.commit()
         
-        logging.info(f"Admin {session.get('username')}: Toggled user {user_id} status to {new_status}")
-        return jsonify({'success': True, 'new_status': new_status})
+        logging.info(f"Admin {session.get('username')}: Toggled user {user_id} status to {user.is_active}")
+        return jsonify({'success': True, 'new_status': user.is_active})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error toggling user status: {str(e)}")
         return jsonify({'error': 'Failed to toggle user status'}), 500
 
@@ -783,22 +758,18 @@ def admin_toggle_user_status(user_id):
 def admin_make_admin(user_id):
     """Make user admin (Admin only)"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('UPDATE users SET is_admin = 1 WHERE id = ?', (user_id,))
-        
-        if cursor.rowcount == 0:
-            conn.close()
+        user = User.query.get(user_id)
+        if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        conn.commit()
-        conn.close()
+        user.is_admin = True
+        db.session.commit()
         
         logging.info(f"Admin {session.get('username')}: Made user {user_id} an admin")
         return jsonify({'success': True, 'message': 'User promoted to admin'})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error making user admin: {str(e)}")
         return jsonify({'error': 'Failed to make user admin'}), 500
 
@@ -832,9 +803,6 @@ def forgot_password():
         return redirect(url_for('login'))
     
     return render_template('auth/forgot_password.html')
-# Add these routes to your app.py file
-
-# Add after the existing user routes
 
 @app.route('/api/user/info')
 @login_required
@@ -842,25 +810,15 @@ def get_user_info():
     """Get user information"""
     try:
         user_id = session.get('user_id')
+        user = User.query.get(user_id)
         
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT username, email, created_at, last_login, is_admin
-            FROM users WHERE id = ?
-        ''', (user_id,))
-        
-        user_info = cursor.fetchone()
-        conn.close()
-        
-        if user_info:
+        if user:
             return jsonify({
-                'username': user_info[0],
-                'email': user_info[1],
-                'created_at': user_info[2],
-                'last_login': user_info[3],
-                'is_admin': bool(user_info[4])
+                'username': user.username,
+                'email': user.email,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'is_admin': user.is_admin
             })
         else:
             return jsonify({'error': 'User not found'}), 404
@@ -891,28 +849,23 @@ def update_profile():
         if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
             return jsonify({'success': False, 'message': 'Invalid email format'}), 400
         
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
         # Check if username/email already exists for other users
-        cursor.execute('''
-            SELECT id FROM users 
-            WHERE (username = ? OR email = ?) AND id != ?
-        ''', (username, email, user_id))
+        existing_user = User.query.filter(
+            ((User.username == username) | (User.email == email)) & 
+            (User.id != user_id)
+        ).first()
         
-        if cursor.fetchone():
-            conn.close()
+        if existing_user:
             return jsonify({'success': False, 'message': 'Username or email already exists'}), 400
         
         # Update user info
-        cursor.execute('''
-            UPDATE users 
-            SET username = ?, email = ?
-            WHERE id = ?
-        ''', (username, email, user_id))
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
         
-        conn.commit()
-        conn.close()
+        user.username = username
+        user.email = email
+        db.session.commit()
         
         # Update session
         session['username'] = username
@@ -921,6 +874,7 @@ def update_profile():
         return jsonify({'success': True, 'message': 'Profile updated successfully'})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error updating profile: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to update profile'}), 500
 
@@ -931,28 +885,20 @@ def get_user_activity():
     try:
         user_id = session.get('user_id')
         
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
         # Get recent conversations
-        cursor.execute('''
-            SELECT timestamp, intent, 'message' as activity_type
-            FROM conversations 
-            WHERE user_id = ?
-            ORDER BY timestamp DESC
-            LIMIT 10
-        ''', (user_id,))
+        conversations = Conversation.query.filter_by(user_id=user_id)\
+            .order_by(Conversation.timestamp.desc())\
+            .limit(10)\
+            .all()
         
         activities = []
-        for row in cursor.fetchall():
-            timestamp = row[0]
-            intent = row[1] or 'general'
+        for conv in conversations:
+            timestamp = conv.timestamp
+            intent = conv.intent or 'general'
             
             # Calculate time ago
-            from datetime import datetime
             try:
-                activity_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                time_diff = datetime.now() - activity_time
+                time_diff = datetime.utcnow() - timestamp
                 
                 if time_diff.days > 0:
                     time_ago = f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
@@ -992,16 +938,13 @@ def get_user_activity():
                 'color': color
             })
         
-        conn.close()
         return jsonify(activities)
         
     except Exception as e:
         logging.error(f"Error getting user activity: {str(e)}")
         return jsonify([])
-    
 
-# Add these routes to your existing app.py
-
+# Document upload routes
 @app.route('/api/upload-document', methods=['POST'])
 @login_required
 def upload_document():
@@ -1119,49 +1062,23 @@ def get_supported_formats():
 def save_document_info(user_id, session_id, file_info, processing_result):
     """Save document information to database"""
     try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
+        document = Document(
+            user_id=user_id,
+            session_id=session_id,
+            file_id=file_info['file_id'],
+            original_filename=file_info['original_filename'],
+            file_size=file_info['file_size'],
+            file_type=processing_result['metadata'].get('file_type', 'unknown'),
+            word_count=processing_result['metadata'].get('word_count', 0),
+            char_count=processing_result['metadata'].get('char_count', 0),
+            processed=processing_result['success']
+        )
         
-        # Create documents table if it doesn't exist
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                session_id TEXT NOT NULL,
-                file_id TEXT UNIQUE NOT NULL,
-                original_filename TEXT NOT NULL,
-                file_size INTEGER,
-                file_type TEXT,
-                word_count INTEGER,
-                char_count INTEGER,
-                uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                processed BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        # Insert document info
-        cursor.execute('''
-            INSERT INTO documents (
-                user_id, session_id, file_id, original_filename, file_size,
-                file_type, word_count, char_count, processed
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            user_id,
-            session_id,
-            file_info['file_id'],
-            file_info['original_filename'],
-            file_info['file_size'],
-            processing_result['metadata'].get('file_type', 'unknown'),
-            processing_result['metadata'].get('word_count', 0),
-            processing_result['metadata'].get('char_count', 0),
-            processing_result['success']
-        ))
-        
-        conn.commit()
-        conn.close()
+        db.session.add(document)
+        db.session.commit()
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error saving document info: {str(e)}")
 
 @app.route('/api/user/documents')
@@ -1171,35 +1088,55 @@ def get_user_documents():
     try:
         user_id = session.get('user_id')
         
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
+        documents = Document.query.filter_by(user_id=user_id)\
+            .order_by(Document.uploaded_at.desc())\
+            .limit(20)\
+            .all()
         
-        cursor.execute('''
-            SELECT original_filename, file_size, word_count, uploaded_at, processed
-            FROM documents 
-            WHERE user_id = ?
-            ORDER BY uploaded_at DESC
-            LIMIT 20
-        ''', (user_id,))
-        
-        documents = []
-        for row in cursor.fetchall():
-            documents.append({
-                'filename': row[0],
-                'file_size': row[1],
-                'word_count': row[2],
-                'uploaded_at': row[3],
-                'processed': bool(row[4])
+        formatted_documents = []
+        for doc in documents:
+            formatted_documents.append({
+                'filename': doc.original_filename,
+                'file_size': doc.file_size,
+                'word_count': doc.word_count,
+                'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                'processed': doc.processed
             })
         
-        conn.close()
-        return jsonify(documents)
+        return jsonify(formatted_documents)
         
     except Exception as e:
         logging.error(f"Error getting user documents: {str(e)}")
         return jsonify([])
 
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('errors/404.html'), 404
 
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('errors/500.html'), 500
 
+# Database initialization
+def init_db():
+    """Initialize database with default data"""
+    try:
+        # Create default admin user if it doesn't exist
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            success, result = create_user('admin', 'admin@example.com', 'admin123', is_admin=True)
+            if success:
+                logging.info("Default admin user created: admin/admin123")
+            else:
+                logging.error(f"Failed to create admin user: {result}")
+    except Exception as e:
+        logging.error(f"Error initializing database: {str(e)}")
+
+# Application startup
 if __name__ == '__main__':
+    with app.app_context():
+        init_db()
+    
     app.run(debug=True, host='0.0.0.0', port=5001)

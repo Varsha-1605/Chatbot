@@ -1,355 +1,325 @@
-import sqlite3
-import json
-from datetime import datetime
-from config import Config
+from datetime import datetime, timedelta
+from sqlalchemy import func, text, and_
+from models import db, User, Conversation, UserSession, Document, Analytics, FAQ, UserPreference
 
 class DatabaseManager:
     def __init__(self):
-        self.db_path = Config.DATABASE_PATH
-        self.init_database()
-    
-    def init_database(self):
-        """Initialize database tables"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                is_admin BOOLEAN DEFAULT FALSE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_login DATETIME,
-                is_active BOOLEAN DEFAULT TRUE
-            )
-        ''')
-        
-        # Conversations table (updated with user_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                user_id TEXT,
-                user_message TEXT NOT NULL,
-                bot_response TEXT NOT NULL,
-                sentiment REAL,
-                intent TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        # User sessions table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_sessions (
-                session_id TEXT PRIMARY KEY,
-                user_id TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
-                message_count INTEGER DEFAULT 0,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        # Analytics table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS analytics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                metric_name TEXT NOT NULL,
-                metric_value TEXT NOT NULL,
-                date DATE DEFAULT CURRENT_DATE,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # FAQ table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS faq (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                question TEXT NOT NULL,
-                answer TEXT NOT NULL,
-                category TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # User preferences table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_preferences (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                preference_key TEXT NOT NULL,
-                preference_value TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                UNIQUE(user_id, preference_key)
-            )
-        ''')
-        
-        # Login attempts table (for security)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS login_attempts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                ip_address TEXT,
-                success BOOLEAN,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create admin user if it doesn't exist
-        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 1')
-        admin_count = cursor.fetchone()[0]
-        
-        if admin_count == 0:
-            # Import the hash_password function locally to avoid circular imports
-            import hashlib
-            import secrets
-            
-            def hash_password(password):
-                salt = secrets.token_hex(16)
-                password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-                return f"{salt}:{password_hash}"
-            
-            # Create default admin user
-            admin_password_hash = hash_password('admin123')
-            cursor.execute('''
-                INSERT INTO users (id, username, email, password_hash, is_admin)
-                VALUES (?, ?, ?, ?, ?)
-            ''', ('admin-001', 'admin', 'admin@chatbot.com', admin_password_hash, True))
-            
-            print("Default admin user created:")
-            print("Username: admin")
-            print("Password: admin123")
-            print("Please change this password after first login!")
-        
-        conn.commit()
-        conn.close()
+        pass  # Database is now handled by Flask-SQLAlchemy
     
     def save_conversation(self, session_id, user_message, bot_response, sentiment=None, intent=None, user_id=None):
         """Save conversation to database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO conversations (session_id, user_id, user_message, bot_response, sentiment, intent)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (session_id, user_id, user_message, bot_response, sentiment, intent))
-        
-        # Update session info
-        cursor.execute('''
-            INSERT OR REPLACE INTO user_sessions (session_id, user_id, last_activity, message_count)
-            VALUES (?, ?, CURRENT_TIMESTAMP, 
-                    COALESCE((SELECT message_count FROM user_sessions WHERE session_id = ?), 0) + 1)
-        ''', (session_id, user_id, session_id))
-        
-        conn.commit()
-        conn.close()
+        try:
+            conversation = Conversation(
+                session_id=session_id,
+                user_message=user_message,
+                bot_response=bot_response,
+                sentiment=sentiment,
+                intent=intent,
+                user_id=user_id
+            )
+            db.session.add(conversation)
+            
+            # Update or create session info
+            session = UserSession.query.filter_by(session_id=session_id).first()
+            if session:
+                session.last_activity = datetime.utcnow()
+                session.message_count += 1
+            else:
+                session = UserSession(
+                    session_id=session_id,
+                    user_id=user_id,
+                    message_count=1
+                )
+                db.session.add(session)
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
     
     def get_conversation_history(self, session_id, limit=10):
         """Get conversation history for a session"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        conversations = Conversation.query.filter_by(session_id=session_id)\
+            .order_by(Conversation.timestamp.desc())\
+            .limit(limit)\
+            .all()
         
-        cursor.execute('''
-            SELECT user_message, bot_response, timestamp
-            FROM conversations
-            WHERE session_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        ''', (session_id, limit))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        return list(reversed(results))
+        # Return in chronological order (oldest first)
+        return [(conv.user_message, conv.bot_response, conv.timestamp.isoformat()) 
+                for conv in reversed(conversations)]
     
-    def get_user_conversations(self, user_id, limit=50):
-        """Get all conversations for a specific user"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+    def get_user_conversations(self, user_id, limit=100):
+        """Get user's conversations"""
+        conversations = Conversation.query.filter_by(user_id=user_id)\
+            .order_by(Conversation.timestamp.desc())\
+            .limit(limit)\
+            .all()
         
-        cursor.execute('''
-            SELECT session_id, user_message, bot_response, timestamp, sentiment, intent
-            FROM conversations
-            WHERE user_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        ''', (user_id, limit))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        return results
+        return [(conv.session_id, conv.user_message, conv.bot_response, 
+                conv.timestamp.isoformat(), conv.sentiment, conv.intent) 
+                for conv in conversations]
     
     def get_analytics_data(self):
         """Get analytics data for dashboard"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Total conversations
-        cursor.execute('SELECT COUNT(*) FROM conversations')
-        total_conversations = cursor.fetchone()[0]
-        
-        # Unique users
-        cursor.execute('SELECT COUNT(DISTINCT user_id) FROM conversations WHERE user_id IS NOT NULL')
-        unique_users = cursor.fetchone()[0]
-        
-        # Registered users
-        cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 1')
-        registered_users = cursor.fetchone()[0]
-        
-        # Average sentiment
-        cursor.execute('SELECT AVG(sentiment) FROM conversations WHERE sentiment IS NOT NULL')
-        avg_sentiment = cursor.fetchone()[0] or 0
-        
-        # Messages per day (last 7 days)
-        cursor.execute('''
-            SELECT DATE(timestamp), COUNT(*)
-            FROM conversations
-            WHERE timestamp >= datetime('now', '-7 days')
-            GROUP BY DATE(timestamp)
-            ORDER BY DATE(timestamp)
-        ''')
-        messages_per_day = cursor.fetchall()
-        
-        # User activity stats
-        cursor.execute('''
-            SELECT 
-                COUNT(DISTINCT DATE(c.timestamp)) as active_days,
-                AVG(daily_messages.msg_count) as avg_daily_messages
-            FROM conversations c
-            JOIN (
-                SELECT DATE(timestamp) as date, COUNT(*) as msg_count
-                FROM conversations 
-                WHERE timestamp >= datetime('now', '-30 days')
-                GROUP BY DATE(timestamp)
-            ) daily_messages ON DATE(c.timestamp) = daily_messages.date
-            WHERE c.timestamp >= datetime('now', '-30 days')
-        ''')
-        user_activity = cursor.fetchone()
-        
-        conn.close()
-        
-        return {
-            'total_conversations': total_conversations,
-            'unique_users': unique_users,
-            'registered_users': registered_users,
-            'avg_sentiment': round(avg_sentiment, 2),
-            'messages_per_day': messages_per_day,
-            'active_days': user_activity[0] if user_activity[0] else 0,
-            'avg_daily_messages': round(user_activity[1], 1) if user_activity[1] else 0
-        }
+        try:
+            # Total conversations
+            total_conversations = Conversation.query.count()
+            
+            # Unique users (sessions)
+            unique_sessions = UserSession.query.count()
+            
+            # Average sentiment
+            avg_sentiment = db.session.query(func.avg(Conversation.sentiment))\
+                .filter(Conversation.sentiment.isnot(None))\
+                .scalar() or 0
+            
+            # Messages per day (last 7 days)
+            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+            messages_per_day = db.session.query(
+                func.date(Conversation.timestamp).label('date'),
+                func.count(Conversation.id).label('count')
+            )\
+            .filter(Conversation.timestamp >= seven_days_ago)\
+            .group_by(func.date(Conversation.timestamp))\
+            .order_by(func.date(Conversation.timestamp))\
+            .all()
+            
+            # Recent activity
+            recent_activity = Conversation.query\
+                .join(User, Conversation.user_id == User.id, isouter=True)\
+                .order_by(Conversation.timestamp.desc())\
+                .limit(5)\
+                .all()
+            
+            # Intent distribution
+            intent_distribution = db.session.query(
+                Conversation.intent,
+                func.count(Conversation.id).label('count')
+            )\
+            .filter(Conversation.intent.isnot(None))\
+            .group_by(Conversation.intent)\
+            .order_by(func.count(Conversation.id).desc())\
+            .limit(10)\
+            .all()
+            
+            return {
+                'total_conversations': total_conversations,
+                'unique_users': unique_sessions,
+                'avg_sentiment': round(avg_sentiment, 2),
+                'messages_per_day': [(str(date), count) for date, count in messages_per_day],
+                'recent_activity': [
+                    {
+                        'user_message': conv.user_message[:50] + ('...' if len(conv.user_message) > 50 else ''),
+                        'bot_response': conv.bot_response[:50] + ('...' if len(conv.bot_response) > 50 else ''),
+                        'timestamp': conv.timestamp.isoformat(),
+                        'username': conv.user.username if conv.user else 'Anonymous'
+                    }
+                    for conv in recent_activity
+                ],
+                'intent_distribution': [{'intent': intent, 'count': count} 
+                                      for intent, count in intent_distribution]
+            }
+        except Exception as e:
+            print(f"Error getting analytics: {str(e)}")
+            return {
+                'total_conversations': 0,
+                'unique_users': 0,
+                'avg_sentiment': 0,
+                'messages_per_day': [],
+                'recent_activity': [],
+                'intent_distribution': []
+            }
     
-    def log_login_attempt(self, username, ip_address, success):
-        """Log login attempts for security monitoring"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO login_attempts (username, ip_address, success)
-            VALUES (?, ?, ?)
-        ''', (username, ip_address, success))
-        
-        conn.commit()
-        conn.close()
+    def get_user_stats(self, user_id):
+        """Get user-specific statistics"""
+        try:
+            # Total messages
+            total_messages = Conversation.query.filter_by(user_id=user_id).count()
+            
+            # Sessions count
+            sessions_count = UserSession.query.filter_by(user_id=user_id).count()
+            
+            # Average sentiment
+            avg_sentiment = db.session.query(func.avg(Conversation.sentiment))\
+                .filter(and_(Conversation.user_id == user_id, 
+                           Conversation.sentiment.isnot(None)))\
+                .scalar() or 0
+            
+            # Most used intents
+            top_intents = db.session.query(
+                Conversation.intent,
+                func.count(Conversation.id).label('count')
+            )\
+            .filter(and_(Conversation.user_id == user_id, 
+                        Conversation.intent.isnot(None)))\
+            .group_by(Conversation.intent)\
+            .order_by(func.count(Conversation.id).desc())\
+            .limit(5)\
+            .all()
+            
+            # Documents uploaded
+            documents_count = Document.query.filter_by(user_id=user_id).count()
+            
+            return {
+                'total_messages': total_messages,
+                'sessions_count': sessions_count,
+                'avg_sentiment': round(avg_sentiment, 2),
+                'top_intents': [{'intent': intent, 'count': count} 
+                               for intent, count in top_intents],
+                'documents_uploaded': documents_count
+            }
+        except Exception as e:
+            print(f"Error getting user stats: {str(e)}")
+            return {
+                'total_messages': 0,
+                'sessions_count': 0,
+                'avg_sentiment': 0,
+                'top_intents': [],
+                'documents_uploaded': 0
+            }
     
-    def get_failed_login_attempts(self, username, minutes=15):
-        """Get failed login attempts for a username in the last N minutes"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT COUNT(*) FROM login_attempts
-            WHERE username = ? AND success = 0
-            AND timestamp > datetime('now', '-{} minutes')
-        '''.format(minutes), (username,))
-        
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        return count
-    
-    def update_last_login(self, user_id):
-        """Update user's last login timestamp"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            UPDATE users SET last_login = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (user_id,))
-        
-        conn.commit()
-        conn.close()
+    def save_user_preference(self, user_id, preference_key, preference_value):
+        """Save user preference"""
+        try:
+            preference = UserPreference.query.filter_by(
+                user_id=user_id, 
+                preference_key=preference_key
+            ).first()
+            
+            if preference:
+                preference.preference_value = preference_value
+                preference.updated_at = datetime.utcnow()
+            else:
+                preference = UserPreference(
+                    user_id=user_id,
+                    preference_key=preference_key,
+                    preference_value=preference_value
+                )
+                db.session.add(preference)
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
     
     def get_user_preferences(self, user_id):
         """Get user preferences"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT preference_key, preference_value
-            FROM user_preferences
-            WHERE user_id = ?
-        ''', (user_id,))
-        
-        preferences = dict(cursor.fetchall())
-        conn.close()
-        
-        return preferences
+        try:
+            preferences = UserPreference.query.filter_by(user_id=user_id).all()
+            return {pref.preference_key: pref.preference_value for pref in preferences}
+        except Exception as e:
+            print(f"Error getting preferences: {str(e)}")
+            return {}
     
-    def save_user_preference(self, user_id, key, value):
-        """Save or update user preference"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO user_preferences (user_id, preference_key, preference_value, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (user_id, key, value))
-        
-        conn.commit()
-        conn.close()
+    def clear_user_data(self, user_id):
+        """Clear all user data"""
+        try:
+            # Delete conversations
+            Conversation.query.filter_by(user_id=user_id).delete()
+            
+            # Delete sessions
+            UserSession.query.filter_by(user_id=user_id).delete()
+            
+            # Delete documents
+            Document.query.filter_by(user_id=user_id).delete()
+            
+            # Delete preferences
+            UserPreference.query.filter_by(user_id=user_id).delete()
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
     
-    def get_user_stats(self, user_id):
-        """Get statistics for a specific user"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Total messages
-        cursor.execute('SELECT COUNT(*) FROM conversations WHERE user_id = ?', (user_id,))
-        total_messages = cursor.fetchone()[0]
-        
-        # Average sentiment
-        cursor.execute('SELECT AVG(sentiment) FROM conversations WHERE user_id = ? AND sentiment IS NOT NULL', (user_id,))
-        avg_sentiment = cursor.fetchone()[0] or 0
-        
-        # Most common intent
-        cursor.execute('''
-            SELECT intent, COUNT(*) as count
-            FROM conversations
-            WHERE user_id = ? AND intent IS NOT NULL
-            GROUP BY intent
-            ORDER BY count DESC
-            LIMIT 1
-        ''', (user_id,))
-        
-        top_intent = cursor.fetchone()
-        
-        # First interaction
-        cursor.execute('SELECT MIN(timestamp) FROM conversations WHERE user_id = ?', (user_id,))
-        first_interaction = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        return {
-            'total_messages': total_messages,
-            'avg_sentiment': round(avg_sentiment, 2),
-            'top_intent': top_intent[0] if top_intent else 'None',
-            'first_interaction': first_interaction
-        }
+    def save_analytics_data(self, metric_name, metric_value, date=None):
+        """Save analytics data"""
+        try:
+            analytics = Analytics(
+                metric_name=metric_name,
+                metric_value=str(metric_value),
+                date=date or datetime.utcnow().date()
+            )
+            db.session.add(analytics)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    def add_faq(self, question, answer, category=None):
+        """Add FAQ entry"""
+        try:
+            faq = FAQ(
+                question=question,
+                answer=answer,
+                category=category
+            )
+            db.session.add(faq)
+            db.session.commit()
+            return faq.id
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    def search_conversations(self, query, user_id=None, limit=50):
+        """Search conversations by text"""
+        try:
+            filters = [
+                Conversation.user_message.contains(query) |
+                Conversation.bot_response.contains(query)
+            ]
+            
+            if user_id:
+                filters.append(Conversation.user_id == user_id)
+            
+            conversations = Conversation.query\
+                .filter(and_(*filters))\
+                .order_by(Conversation.timestamp.desc())\
+                .limit(limit)\
+                .all()
+            
+            return [conv.to_dict() for conv in conversations]
+        except Exception as e:
+            print(f"Error searching conversations: {str(e)}")
+            return []
+    
+    def get_active_sessions(self, since_hours=24):
+        """Get active sessions within specified hours"""
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=since_hours)
+            sessions = UserSession.query\
+                .filter(UserSession.last_activity >= cutoff_time)\
+                .order_by(UserSession.last_activity.desc())\
+                .all()
+            
+            return [session.to_dict() for session in sessions]
+        except Exception as e:
+            print(f"Error getting active sessions: {str(e)}")
+            return []
+    
+    def cleanup_old_data(self, days_old=90):
+        """Clean up old data"""
+        try:
+            cutoff_date = datetime.utcnow() - timedelta(days=days_old)
+            
+            # Clean old conversations from anonymous users
+            old_conversations = Conversation.query\
+                .filter(and_(
+                    Conversation.timestamp < cutoff_date,
+                    Conversation.user_id.is_(None)
+                ))\
+                .delete()
+            
+            # Clean old sessions
+            old_sessions = UserSession.query\
+                .filter(UserSession.last_activity < cutoff_date)\
+                .delete()
+            
+            db.session.commit()
+            
+            return {
+                'conversations_deleted': old_conversations,
+                'sessions_deleted': old_sessions
+            }
+        except Exception as e:
+            db.session.rollback()
+            raise e

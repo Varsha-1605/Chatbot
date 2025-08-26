@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="A:\Users\VARSHA\Downloads\Dynamic Chatbot\Project4\myenv"
+VIRTUAL_ENV="A:\Users\VARSHA\Downloads\Dynamic Chatbot\deployable\Project4\myenv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
