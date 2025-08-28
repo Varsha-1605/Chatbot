@@ -4,6 +4,17 @@ An intelligent, full-featured conversational AI designed to provide dynamic and 
 
 -----
 
+## Project Demo:
+
+### 1. User Side:
+
+https://github.com/user-attachments/assets/58b52af5-9769-4901-8e36-cd5bbc8db6e6
+
+### 2. Admin Side:
+
+https://github.com/user-attachments/assets/9b3d0c6f-d22f-425d-9290-0309c03e959a
+
+
 ## 🌟 Features
 
   * **Conversational Core**: The chatbot brain (`chatbot_brain.py`) uses a powerful AI model to process natural language queries and generate human-like responses.
